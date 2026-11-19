@@ -14,7 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable \
-    NODE_ENV=production
+    NODE_ENV=production \
+    NODE_OPTIONS="--max-old-space-size=256"
 
 WORKDIR /usr/src/app
 
