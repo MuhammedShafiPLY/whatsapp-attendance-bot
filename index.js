@@ -619,7 +619,17 @@ const client = new Client({
       '--metrics-recording-only',
       '--mute-audio',
       '--no-default-browser-check',
-      '--single-process',
+      '--disable-features=site-per-process,AudioServiceOutOfProcess,IsolateOrigins',
+      '--renderer-process-limit=1',
+      '--disable-site-isolation-trials',
+      '--disable-ipc-flooding-protection',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-breakpad',
+      '--disable-component-update',
+      '--disable-domain-reliability',
+      '--disk-cache-size=1',
+      '--media-cache-size=1',
+      '--aggressive-cache-discard',
       '--js-flags=--max-old-space-size=256',
       '--window-size=800,600',
     ],
@@ -638,9 +648,12 @@ client.on('code', (code) => {
 
 client.on('qr', (qr) => {
   latestQr = qr;
+  const qrWebUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qr)}`;
   console.log('\n======================================================');
-  console.log('📱 Scan this QR code with WhatsApp on your phone:');
-  console.log('🌐 Or open your Render URL in browser to scan high-res QR image!');
+  console.log('📱 WHATSAPP QR CODE READY TO SCAN!');
+  console.log('👉 CLICK THIS URL TO OPEN & SCAN CLEAN QR CODE:');
+  console.log(qrWebUrl);
+  console.log('🌐 Or visit your Render URL in browser to scan.');
   console.log('======================================================\n');
   qrcode.generate(qr, { small: true });
 });
