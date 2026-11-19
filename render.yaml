@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: zaynlo-whatsapp-bot
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    envVars:
+      - key: TIMEZONE
+        value: Asia/Kolkata
