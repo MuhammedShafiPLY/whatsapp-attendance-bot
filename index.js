@@ -583,16 +583,38 @@ if (chromePath) {
   console.log(`🌐 Using Google Chrome: ${chromePath}`);
 }
 
+// Clean up any stale Chrome profile locks from previous crashes
+try {
+  const authDir = path.join(__dirname, '.wwebjs_auth');
+  if (fs.existsSync(authDir)) {
+    const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+    function removeLocks(dir) {
+      const items = fs.readdirSync(dir);
+      for (const item of items) {
+        const full = path.join(dir, item);
+        try {
+          if (lockFiles.includes(item)) {
+            fs.unlinkSync(full);
+          } else if (fs.statSync(full).isDirectory()) {
+            removeLocks(full);
+          }
+        } catch (_) {}
+      }
+    }
+    removeLocks(authDir);
+  }
+} catch (_) {}
+
 const phoneNumberToPair = (PAIR_WITH_PHONE_NUMBER || '').trim().replace(/[^0-9]/g, '');
 
 const client = new Client({
   authStrategy: new LocalAuth({
     dataPath: './.wwebjs_auth',
   }),
-  authTimeoutMs: 60000,
+  authTimeoutMs: 90000,
   webVersionCache: {
     type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1015901307-alpha.html',
   },
   pairWithPhoneNumber: phoneNumberToPair
     ? {
@@ -605,6 +627,7 @@ const client = new Client({
   puppeteer: {
     headless: true,
     executablePath: chromePath,
+    timeout: 90000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
