@@ -607,9 +607,15 @@ const client = new Client({
       '--disable-blink-features=AutomationControlled',
       '--no-first-run',
       '--no-zygote',
+      '--disable-gpu',
+      '--disable-accelerated-2d-canvas',
+      '--disable-software-rasterizer',
+      '--disable-extensions',
     ],
   },
 });
+
+let latestQr = null;
 
 client.on('code', (code) => {
   console.log('\n======================================================');
@@ -620,8 +626,10 @@ client.on('code', (code) => {
 });
 
 client.on('qr', (qr) => {
+  latestQr = qr;
   console.log('\n======================================================');
   console.log('📱 Scan this QR code with WhatsApp on your phone:');
+  console.log('🌐 Or open your Render URL in browser to scan high-res QR image!');
   console.log('======================================================\n');
   qrcode.generate(qr, { small: true });
 });
@@ -633,6 +641,7 @@ client.on('loading_screen', (percent, message) => {
 let isReadyEmitted = false;
 
 client.on('authenticated', () => {
+  latestQr = null;
   console.log('🔐 WhatsApp authenticated successfully. Local session saved.');
 
   // Auto-sync watchdog for whatsapp-web.js v1.26.0
@@ -912,22 +921,84 @@ const http = require('http');
 async function startApp() {
   await connectToDatabase();
 
-  // Start lightweight HTTP health-check server for Render / Cloud Web Services
+  // Start lightweight HTTP health-check & Web QR viewer server for Render
   const PORT = process.env.PORT || 3000;
   const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        status: 'ok',
-        service: 'Zaynlo WhatsApp Attendance Bot',
-        whatsappReady: isReadyEmitted,
-        timestamp: new Date().toISOString(),
-      })
-    );
+    if (req.url === '/health' || req.url === '/json') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(
+        JSON.stringify({
+          status: 'ok',
+          service: 'Zaynlo WhatsApp Attendance Bot',
+          whatsappReady: isReadyEmitted,
+          hasQr: Boolean(latestQr),
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    if (isReadyEmitted) {
+      res.end(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Zaynlo WhatsApp Bot - Connected</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+        <body style="font-family:system-ui,sans-serif;background:#030712;color:#f9fafb;text-align:center;padding:50px 20px;">
+          <div style="max-width:520px;margin:0 auto;background:#111827;border:1px solid #1f2937;border-radius:16px;padding:32px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
+            <div style="font-size:48px;margin-bottom:12px;">✅</div>
+            <h1 style="color:#22c55e;font-size:24px;margin:0 0 8px;">WhatsApp Bot is Connected!</h1>
+            <p style="color:#9ca3af;font-size:14px;line-height:1.6;">Your attendance automation bot is active and listening to group:<br><strong style="color:#38bdf8;">${GROUP_NAME}</strong></p>
+            <div style="margin-top:24px;padding:12px;background:#1f2937;border-radius:8px;font-size:12px;color:#6b7280;">24/7 Cloud Service running on Render</div>
+          </div>
+        </body>
+        </html>
+      `);
+    } else if (latestQr) {
+      const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(latestQr)}`;
+      res.end(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Scan WhatsApp QR Code</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <meta http-equiv="refresh" content="15">
+        </head>
+        <body style="font-family:system-ui,sans-serif;background:#030712;color:#f9fafb;text-align:center;padding:40px 20px;">
+          <div style="max-width:480px;margin:0 auto;background:#111827;border:1px solid #1f2937;border-radius:16px;padding:28px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
+            <h2 style="color:#38bdf8;margin:0 0 8px;font-size:22px;">📱 Scan with WhatsApp</h2>
+            <p style="color:#9ca3af;font-size:13px;margin:0 0 20px;line-height:1.5;">Open WhatsApp on your phone &gt; <strong>Linked Devices</strong> &gt; <strong>Link a device</strong></p>
+            <div style="background:#ffffff;display:inline-block;padding:16px;border-radius:12px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.3);">
+              <img src="${qrImg}" alt="WhatsApp QR Code" style="display:block;width:280px;height:280px;border-radius:4px;" />
+            </div>
+            <p style="color:#6b7280;font-size:11px;margin-top:20px;">Auto-refreshing every 15 seconds to ensure fresh QR token.</p>
+          </div>
+        </body>
+        </html>
+      `);
+    } else {
+      res.end(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Starting WhatsApp...</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <meta http-equiv="refresh" content="5">
+        </head>
+        <body style="font-family:system-ui,sans-serif;background:#030712;color:#f9fafb;text-align:center;padding:50px 20px;">
+          <div style="max-width:480px;margin:0 auto;background:#111827;border:1px solid #1f2937;border-radius:16px;padding:32px;">
+            <div style="font-size:40px;margin-bottom:12px;">⏳</div>
+            <h2 style="color:#f59e0b;font-size:20px;margin:0 0 8px;">Loading WhatsApp Web...</h2>
+            <p style="color:#9ca3af;font-size:13px;line-height:1.6;">Headless Chrome is initializing and loading web.whatsapp.com. The QR code will appear here in a few moments.</p>
+            <p style="color:#6b7280;font-size:11px;margin-top:20px;">Page refreshes automatically every 5 seconds...</p>
+          </div>
+        </body>
+        </html>
+      `);
+    }
   });
 
   server.listen(PORT, () => {
-    console.log(`🌐 Health-check HTTP server listening on port ${PORT}`);
+    console.log(`🌐 Health-check & Web UI server listening on port ${PORT}`);
   });
 
   client.initialize();
