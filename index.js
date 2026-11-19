@@ -723,26 +723,43 @@ client.on('ready', async () => {
 async function safeReply(chatId, msg, replyText) {
   let sentMessage = null;
 
-  // 1. Try native msg.reply first (handles quoting cleanly in WhatsApp)
+  // 1. Send directly through the chat object (most reliable for WhatsApp groups)
   try {
-    if (msg && typeof msg.reply === 'function') {
-      sentMessage = await msg.reply(replyText);
+    let chat = null;
+    if (msg && typeof msg.getChat === 'function') {
+      try {
+        chat = await msg.getChat();
+      } catch (_) {}
+    }
+    if (chat && typeof chat.sendMessage === 'function') {
+      sentMessage = await chat.sendMessage(replyText);
       if (sentMessage?.id?._serialized) {
-        console.log(`📤 [Reply Dispatched via msg.reply] -> ${chatId} (${sentMessage.id._serialized})`);
+        console.log(`📤 [Reply Sent via chat.sendMessage] -> ${chatId} (${sentMessage.id._serialized})`);
         return sentMessage;
       }
     }
   } catch (err) {
-    console.warn(`⚠️ msg.reply failed: ${err.message}. Trying direct sendMessage...`);
+    console.warn(`⚠️ chat.sendMessage failed: ${err.message}. Trying client.sendMessage...`);
   }
 
-  // 2. Direct message to group (clean, no quotes, avoids LID quote mismatch)
+  // 2. Direct message via client.sendMessage (clean, no quotes, avoids LID quote drop)
   try {
     sentMessage = await client.sendMessage(chatId, replyText);
-    console.log(`📤 [Reply Dispatched via direct sendMessage] -> ${chatId} (${sentMessage?.id?._serialized || 'ok'})`);
+    console.log(`📤 [Reply Sent via client.sendMessage] -> ${chatId} (${sentMessage?.id?._serialized || 'ok'})`);
     return sentMessage;
   } catch (e) {
-    console.error(`❌ Failed to send direct message to group ${chatId}:`, e.message);
+    console.error(`❌ client.sendMessage failed: ${e.message}. Trying msg.reply...`);
+  }
+
+  // 3. Fallback to msg.reply only if direct sending failed
+  try {
+    if (msg && typeof msg.reply === 'function') {
+      sentMessage = await msg.reply(replyText);
+      console.log(`📤 [Reply Sent via msg.reply] -> ${chatId} (${sentMessage?.id?._serialized || 'ok'})`);
+      return sentMessage;
+    }
+  } catch (e) {
+    console.error(`❌ All reply methods failed for ${chatId}:`, e.message);
   }
 
   return sentMessage;
