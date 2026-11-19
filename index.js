@@ -130,13 +130,16 @@ function formatMinutesToHoursAndMinutes(totalMinutes) {
 // 3. Gemini AI & Fallback Pattern Classifier
 // ==========================================
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const geminiModel = genAI.getGenerativeModel({
-  model: 'gemini-1.5-flash',
-  generationConfig: {
-    responseMimeType: 'application/json',
-    temperature: 0.1,
+const geminiModel = genAI.getGenerativeModel(
+  {
+    model: 'gemini-1.5-flash-latest',
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.1,
+    },
   },
-});
+  { apiVersion: 'v1' }
+);
 
 /**
  * Fast fallback pattern classifier when Gemini AI is offline, invalid key, or slow.
@@ -718,20 +721,31 @@ client.on('ready', async () => {
  * from team members and self-sent/admin test messages from the host phone.
  */
 async function safeReply(chatId, msg, replyText) {
+  let sentMessage = null;
+
+  // 1. Try native msg.reply first (handles quoting cleanly in WhatsApp)
   try {
-    if (msg.id?._serialized) {
-      await client.sendMessage(chatId, replyText, { quotedMessageId: msg.id._serialized });
-    } else {
-      await client.sendMessage(chatId, replyText);
+    if (msg && typeof msg.reply === 'function') {
+      sentMessage = await msg.reply(replyText);
+      if (sentMessage?.id?._serialized) {
+        console.log(`📤 [Reply Dispatched via msg.reply] -> ${chatId} (${sentMessage.id._serialized})`);
+        return sentMessage;
+      }
     }
   } catch (err) {
-    console.warn(`⚠️ Quoted reply failed (${err.message}). Sending direct message to group...`);
-    try {
-      await client.sendMessage(chatId, replyText);
-    } catch (e) {
-      console.error(`❌ Failed to send direct message to group ${chatId}:`, e.message);
-    }
+    console.warn(`⚠️ msg.reply failed: ${err.message}. Trying direct sendMessage...`);
   }
+
+  // 2. Direct message to group (clean, no quotes, avoids LID quote mismatch)
+  try {
+    sentMessage = await client.sendMessage(chatId, replyText);
+    console.log(`📤 [Reply Dispatched via direct sendMessage] -> ${chatId} (${sentMessage?.id?._serialized || 'ok'})`);
+    return sentMessage;
+  } catch (e) {
+    console.error(`❌ Failed to send direct message to group ${chatId}:`, e.message);
+  }
+
+  return sentMessage;
 }
 
 // Deduplication set to avoid processing same message if both event handlers fire
